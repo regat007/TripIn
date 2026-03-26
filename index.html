@@ -580,19 +580,28 @@
     border: 1px solid var(--border);
   }
 
-  .map-placeholder {
-    height: 160px;
+  #map-embed-wrap {
+    position: relative;
     border-radius: var(--radius-lg);
-    border: 1px dashed var(--border-strong);
+    overflow: hidden;
+    border: 1px solid var(--border);
+  }
+
+  #map-fallback-iframe {
+    display: block;
+    width: 100%;
+    height: 420px;
+    border: none;
+  }
+
+  .map-hint {
     display: flex;
-    flex-direction: column;
     align-items: center;
-    justify-content: center;
     gap: 10px;
-    color: var(--text-hint);
-    font-size: 14px;
-    text-align: center;
-    padding: 24px;
+    font-size: 13px;
+    color: var(--text-muted);
+    margin-bottom: 10px;
+    flex-wrap: wrap;
   }
 
   /* ── STOP COORD INPUTS ── */
@@ -728,10 +737,14 @@
           </select>
         </div>
       </div>
-      <div id="map-placeholder" class="map-placeholder">
-        <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" opacity="0.4"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z"/><circle cx="12" cy="9" r="2.5"/></svg>
-        <span id="map-placeholder-text">Add lat/lng to stops to see them on the map</span>
+      <div id="map-hint" class="map-hint" style="display:none">
+        <span id="map-hint-text"></span>
         <button class="btn btn-sm" onclick="openSettings()" id="map-key-btn" style="display:none">Add API key in Settings</button>
+      </div>
+      <div id="map-embed-wrap">
+        <iframe id="map-fallback-iframe"
+          src="https://www.google.com/maps/d/embed?mid=1jcs3fqUQHSicdzkYPfijZ_cF353PxoI&ehbc=2E312F"
+          allowfullscreen loading="lazy"></iframe>
       </div>
       <div id="map-canvas" style="display:none"></div>
     </div>
@@ -1332,17 +1345,30 @@ function renderMap() {
 
   const key = localStorage.getItem(LS_GMAPS_KEY);
   const canvas = document.getElementById('map-canvas');
-  const placeholder = document.getElementById('map-placeholder');
-  const placeholderText = document.getElementById('map-placeholder-text');
+  const embedWrap = document.getElementById('map-embed-wrap');
+  const hintBar = document.getElementById('map-hint');
+  const hintText = document.getElementById('map-hint-text');
   const keyBtn = document.getElementById('map-key-btn');
   const controls = document.getElementById('map-controls');
 
-  if (!key) {
+  function showEmbed(hint, showKeyBtn) {
     canvas.style.display = 'none';
-    placeholder.style.display = 'flex';
-    placeholderText.textContent = 'Add your Google Maps API key in Settings to enable the map';
-    keyBtn.style.display = 'inline-flex';
+    embedWrap.style.display = 'block';
     controls.style.display = 'none';
+    if (hint) {
+      hintBar.style.display = 'flex';
+      hintText.textContent = hint;
+      keyBtn.style.display = showKeyBtn ? 'inline-flex' : 'none';
+    } else {
+      hintBar.style.display = 'none';
+    }
+    mapMarkers.forEach(m => m.setMap(null));
+    mapMarkers = [];
+    if (directionsRenderer) { directionsRenderer.setMap(null); directionsRenderer = null; }
+  }
+
+  if (!key) {
+    showEmbed('Add your Google Maps API key in Settings to plot your stops on the map.', true);
     return;
   }
 
@@ -1351,30 +1377,21 @@ function renderMap() {
   if (!mapsApiLoaded) {
     mapRenderPending = true;
     loadMapsApi(key);
-    canvas.style.display = 'none';
-    placeholder.style.display = 'flex';
-    placeholderText.textContent = stopsWithCoords.length > 0 ? 'Loading map…' : 'Add lat/lng to stops to see them on the map';
-    keyBtn.style.display = 'none';
-    controls.style.display = 'none';
+    const hint = stopsWithCoords.length > 0 ? 'Loading map…' : 'Add lat/lng to stops to plot them on the map.';
+    showEmbed(hint, false);
     return;
   }
 
   if (stopsWithCoords.length === 0) {
-    canvas.style.display = 'none';
-    placeholder.style.display = 'flex';
-    placeholderText.textContent = 'Add lat/lng to stops to see them on the map';
-    keyBtn.style.display = 'none';
-    controls.style.display = 'none';
-    mapMarkers.forEach(m => m.setMap(null));
-    mapMarkers = [];
-    if (directionsRenderer) { directionsRenderer.setMap(null); directionsRenderer = null; }
+    showEmbed('Add lat/lng to stops to plot them on the map.', false);
     return;
   }
 
+  // JS map is active — hide iframe, show canvas
   canvas.style.display = 'block';
-  placeholder.style.display = 'none';
+  embedWrap.style.display = 'none';
+  hintBar.style.display = 'none';
   controls.style.display = 'flex';
-  keyBtn.style.display = 'none';
 
   if (!mapInstance) {
     mapInstance = new google.maps.Map(canvas, {
