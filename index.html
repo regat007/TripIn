@@ -641,6 +641,120 @@
   #map-embed-input:focus { border-color: var(--accent); }
   #map-embed-input::placeholder { color: var(--text-hint); }
 
+  /* ── STOP REACTIONS ── */
+  .stop-reactions {
+    display: flex;
+    gap: 2px;
+    margin-top: 7px;
+  }
+
+  .reaction-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    padding: 2px 8px;
+    border-radius: 20px;
+    border: 1px solid transparent;
+    background: transparent;
+    font-family: inherit;
+    font-size: 13px;
+    color: var(--text-hint);
+    cursor: pointer;
+    transition: background 0.12s, border-color 0.12s, color 0.12s;
+    line-height: 1.5;
+  }
+  .reaction-btn:hover {
+    background: var(--bg-tertiary);
+    border-color: var(--border);
+    color: var(--text-muted);
+  }
+  .reaction-btn.has-count { color: var(--text-muted); }
+  .rxn-count { font-size: 12px; min-width: 8px; }
+
+  /* ── STOP COMMENTS ── */
+  .stop-comments {
+    margin-top: 10px;
+    padding-top: 8px;
+    border-top: 1px solid var(--border);
+  }
+
+  .comment-list {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    margin-bottom: 7px;
+  }
+
+  .comment-item {
+    font-size: 12px;
+    color: var(--text-muted);
+    line-height: 1.5;
+  }
+
+  .comment-meta { font-weight: 500; }
+  .comment-time { color: var(--text-hint); }
+
+  .comment-author-row {
+    font-size: 11px;
+    color: var(--text-hint);
+    margin-bottom: 5px;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+  }
+
+  .comment-author-edit {
+    color: var(--accent);
+    cursor: pointer;
+    background: none;
+    border: none;
+    font-family: inherit;
+    font-size: 11px;
+    padding: 0;
+    text-decoration: underline;
+  }
+
+  .comment-input-row {
+    display: flex;
+    gap: 6px;
+    align-items: center;
+  }
+
+  .comment-text-input {
+    flex: 1;
+    font-family: inherit;
+    font-size: 13px;
+    color: var(--text);
+    border: none;
+    border-bottom: 1px solid var(--border);
+    background: transparent;
+    outline: none;
+    padding: 2px 0;
+    min-width: 0;
+  }
+  .comment-text-input:focus { border-color: var(--accent); }
+  .comment-text-input::placeholder { color: var(--text-hint); }
+
+  .comment-name-prompt {
+    display: flex;
+    gap: 6px;
+    align-items: center;
+  }
+
+  .comment-name-input {
+    flex: 1;
+    font-family: inherit;
+    font-size: 13px;
+    color: var(--text);
+    border: none;
+    border-bottom: 1px solid var(--accent);
+    background: transparent;
+    outline: none;
+    padding: 2px 0;
+    min-width: 0;
+  }
+  .comment-name-input::placeholder { color: var(--text-hint); }
+
   /* ── STOP COORD INPUTS ── */
   .stop-coords {
     display: flex;
@@ -893,6 +1007,7 @@ let isSaving = false;
 const LS_DATA    = 'tripPlannerData';
 const LS_BIN     = 'tripPlannerBinId';
 const LS_JBKEY   = 'tripPlannerJSONBinKey';
+const LS_AUTHOR  = 'tripPlannerAuthorName';
 
 // ─────────────────────────────────────────────
 // INIT
@@ -1103,9 +1218,15 @@ function renderDay(day, di) {
 }
 
 function renderStop(dayId, stop) {
+  // Backfill missing fields
+  if (!stop.reactions) stop.reactions = { fire: 0, up: 0, down: 0 };
+  if (!stop.comments)  stop.comments  = [];
+
+  const r = stop.reactions;
   const card = document.createElement('div');
   card.className = 'stop-card';
   card.dataset.stopId = stop.id;
+  card.dataset.dayId  = dayId;
 
   card.innerHTML = `
     <div class="stop-time">
@@ -1119,6 +1240,20 @@ function renderStop(dayId, stop) {
       <textarea class="stop-notes-input" placeholder="Notes…" rows="1"
         onchange="updateStop('${dayId}','${stop.id}','notes',this.value)"
         oninput="autoResize(this)">${esc(stop.notes || '')}</textarea>
+      <div class="stop-reactions">
+        ${['fire','up','down'].map(k => {
+          const emoji = k==='fire'?'🔥':k==='up'?'👍':'👎';
+          const n = r[k] || 0;
+          return `<button class="reaction-btn${n>0?' has-count':''}"
+            onclick="incrementReaction('${dayId}','${stop.id}','${k}')">
+            ${emoji}<span class="rxn-count" id="rxn-${stop.id}-${k}">${n>0?n:''}</span>
+          </button>`;
+        }).join('')}
+      </div>
+      <div class="stop-comments">
+        <div class="comment-list" id="cmt-list-${stop.id}">${commentsHtml(stop.comments)}</div>
+        <div id="cmt-input-area-${stop.id}">${renderCommentInputArea(stop.id, dayId)}</div>
+      </div>
       <div class="stop-coords">
         <div class="stop-coord-field">
           <span class="stop-coord-label">lat</span>
@@ -1190,7 +1325,7 @@ function removeDay(dayId) {
 function addStop(dayId) {
   const day = state.days.find(d => d.id === dayId);
   if (!day) return;
-  const stop = { id: uid(), time: '', title: '', notes: '', cost: 0, votes: {up:0,down:0}, comments: [] };
+  const stop = { id: uid(), time: '', title: '', notes: '', cost: 0, votes: {up:0,down:0}, reactions: {fire:0,up:0,down:0}, comments: [] };
   day.stops.push(stop);
   const list = document.getElementById(`stops-${dayId}`);
   list.appendChild(renderStop(dayId, stop));
@@ -1592,6 +1727,108 @@ function saveMapsKey() {
     closeSettings();
     renderMap();
   }
+}
+
+// ─────────────────────────────────────────────
+// REACTIONS (Feature 7)
+// ─────────────────────────────────────────────
+function incrementReaction(dayId, stopId, key) {
+  const day = state.days.find(d => d.id === dayId);
+  if (!day) return;
+  const stop = day.stops.find(s => s.id === stopId);
+  if (!stop) return;
+  if (!stop.reactions) stop.reactions = { fire: 0, up: 0, down: 0 };
+  stop.reactions[key] = (stop.reactions[key] || 0) + 1;
+  const span = document.getElementById(`rxn-${stopId}-${key}`);
+  if (span) {
+    span.textContent = stop.reactions[key];
+    span.closest('.reaction-btn').classList.add('has-count');
+  }
+  scheduleSave();
+}
+
+// ─────────────────────────────────────────────
+// COMMENTS (Feature 8)
+// ─────────────────────────────────────────────
+function relativeTime(ts) {
+  const diff = Date.now() - ts;
+  const mins = Math.floor(diff / 60000);
+  if (mins < 1)  return 'just now';
+  if (mins < 60) return `${mins}m ago`;
+  const hours = Math.floor(mins / 60);
+  if (hours < 24) return `${hours}h ago`;
+  return new Date(ts).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+}
+
+function commentsHtml(comments) {
+  if (!comments || comments.length === 0) return '';
+  return comments.map(c =>
+    `<div class="comment-item">` +
+    `<span class="comment-meta">${esc(c.author)}</span>` +
+    `<span class="comment-time"> · ${relativeTime(c.ts)}</span>` +
+    ` — ${esc(c.text)}` +
+    `</div>`
+  ).join('');
+}
+
+function renderCommentInputArea(stopId, dayId) {
+  const name = localStorage.getItem(LS_AUTHOR) || '';
+  if (!name) {
+    return `<div class="comment-name-prompt">` +
+      `<input class="comment-name-input" id="name-input-${stopId}" placeholder="What's your name?"` +
+      ` onkeydown="if(event.key==='Enter')confirmAuthorName('${stopId}','${dayId}')">` +
+      `<button class="btn btn-sm" onclick="confirmAuthorName('${stopId}','${dayId}')">Save</button>` +
+      `</div>`;
+  }
+  return `<div class="comment-author-row">` +
+    `Posting as <strong>${esc(name)}</strong>` +
+    `<button class="comment-author-edit" onclick="editAuthorName('${stopId}','${dayId}')">edit</button>` +
+    `</div>` +
+    `<div class="comment-input-row">` +
+    `<input class="comment-text-input" id="cmt-input-${stopId}" placeholder="Add a comment…"` +
+    ` onkeydown="if(event.key==='Enter')postComment('${dayId}','${stopId}')">` +
+    `<button class="btn btn-ghost btn-sm" onclick="postComment('${dayId}','${stopId}')">Post</button>` +
+    `</div>`;
+}
+
+function confirmAuthorName(stopId, dayId) {
+  const input = document.getElementById(`name-input-${stopId}`);
+  const name = input ? input.value.trim() : '';
+  if (!name) { input && (input.style.borderColor = 'var(--danger)'); return; }
+  localStorage.setItem(LS_AUTHOR, name);
+  const area = document.getElementById(`cmt-input-area-${stopId}`);
+  if (area) area.innerHTML = renderCommentInputArea(stopId, dayId);
+  setTimeout(() => document.getElementById(`cmt-input-${stopId}`)?.focus(), 0);
+}
+
+function editAuthorName(stopId, dayId) {
+  const area = document.getElementById(`cmt-input-area-${stopId}`);
+  if (!area) return;
+  const currentName = localStorage.getItem(LS_AUTHOR) || '';
+  area.innerHTML = `<div class="comment-name-prompt">` +
+    `<input class="comment-name-input" id="name-input-${stopId}" value="${esc(currentName)}" placeholder="Your name…"` +
+    ` onkeydown="if(event.key==='Enter')confirmAuthorName('${stopId}','${dayId}')">` +
+    `<button class="btn btn-sm" onclick="confirmAuthorName('${stopId}','${dayId}')">Save</button>` +
+    `</div>`;
+  setTimeout(() => { const el = document.getElementById(`name-input-${stopId}`); el?.focus(); el?.select(); }, 0);
+}
+
+function postComment(dayId, stopId) {
+  const name = localStorage.getItem(LS_AUTHOR) || '';
+  if (!name) return;
+  const input = document.getElementById(`cmt-input-${stopId}`);
+  const text = input ? input.value.trim() : '';
+  if (!text) return;
+  const day = state.days.find(d => d.id === dayId);
+  if (!day) return;
+  const stop = day.stops.find(s => s.id === stopId);
+  if (!stop) return;
+  if (!stop.comments) stop.comments = [];
+  stop.comments.push({ author: name, text, ts: Date.now() });
+  const list = document.getElementById(`cmt-list-${stopId}`);
+  if (list) list.innerHTML = commentsHtml(stop.comments);
+  if (input) input.value = '';
+  scheduleSave();
 }
 
 // ─────────────────────────────────────────────
