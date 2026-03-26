@@ -475,6 +475,55 @@
     transform: translateX(-50%) translateY(0);
   }
 
+  /* ── WELCOME MODAL ── */
+  #welcome-overlay {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.35);
+    z-index: 400;
+    backdrop-filter: blur(3px);
+    align-items: center;
+    justify-content: center;
+  }
+  #welcome-overlay.open { display: flex; }
+
+  #welcome-modal {
+    background: var(--bg);
+    border-radius: var(--radius-lg);
+    padding: 40px 36px 32px;
+    max-width: 400px;
+    width: 90%;
+    text-align: center;
+    box-shadow: var(--shadow-md);
+    animation: modal-in 0.2s ease;
+  }
+
+  @keyframes modal-in {
+    from { opacity: 0; transform: scale(0.95) translateY(8px); }
+    to   { opacity: 1; transform: scale(1) translateY(0); }
+  }
+
+  #welcome-modal .welcome-icon {
+    font-size: 36px;
+    margin-bottom: 16px;
+    display: block;
+  }
+
+  #welcome-modal h2 {
+    font-family: 'Instrument Serif', serif;
+    font-size: 26px;
+    font-weight: 400;
+    margin-bottom: 8px;
+  }
+
+  #welcome-modal p {
+    color: var(--text-muted);
+    font-size: 14px;
+    margin-bottom: 24px;
+    line-height: 1.6;
+  }
+
   /* ── RESPONSIVE ── */
   @media (max-width: 600px) {
     #main { padding: 20px 16px 60px; }
@@ -618,6 +667,16 @@
       <p id="settings-status-text" style="font-size:13px;color:var(--text-muted)"></p>
     </div>
 
+  </div>
+</div>
+
+<!-- WELCOME MODAL -->
+<div id="welcome-overlay">
+  <div id="welcome-modal">
+    <span class="welcome-icon">🗺️</span>
+    <h2 id="welcome-title">Welcome to your trip!</h2>
+    <p id="welcome-body">Your trip has been created and is ready to plan. Add stops to each day and share the link with your group.</p>
+    <button class="btn btn-primary" onclick="closeWelcome()">Start planning</button>
   </div>
 </div>
 
@@ -774,7 +833,7 @@ async function createTrip() {
     fadeSync();
     closeSettings();
     renderTrip();
-    showToast('Trip created! Copy the link to share with friends.');
+    showWelcome(name);
   } catch(e) {
     setSyncStatus('error', 'Create failed');
     showToast('Failed to create trip — check your JSONBin key');
@@ -1002,6 +1061,15 @@ function fadeSync() {
   fadeTimeout = setTimeout(() => {
     setSyncStatus('', '');
   }, 3000);
+}
+
+function showWelcome(tripName) {
+  document.getElementById('welcome-title').textContent = `Welcome to ${tripName}!`;
+  document.getElementById('welcome-overlay').classList.add('open');
+}
+
+function closeWelcome() {
+  document.getElementById('welcome-overlay').classList.remove('open');
 }
 
 function showToast(msg) {
