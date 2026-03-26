@@ -581,7 +581,6 @@
   }
 
   #map-embed-wrap {
-    position: relative;
     border-radius: var(--radius-lg);
     overflow: hidden;
     border: 1px solid var(--border);
@@ -594,6 +593,21 @@
     border: none;
   }
 
+  #map-blank-placeholder {
+    height: 260px;
+    border-radius: var(--radius-lg);
+    border: 1px dashed var(--border-strong);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    color: var(--text-hint);
+    font-size: 14px;
+    text-align: center;
+    padding: 24px;
+  }
+
   .map-hint {
     display: flex;
     align-items: center;
@@ -603,6 +617,29 @@
     margin-bottom: 10px;
     flex-wrap: wrap;
   }
+
+  #map-import-row {
+    margin-top: 10px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+
+  #map-embed-input {
+    flex: 1;
+    min-width: 200px;
+    padding: 6px 10px;
+    border: 1px solid var(--border-strong);
+    border-radius: var(--radius);
+    font-family: inherit;
+    font-size: 13px;
+    color: var(--text);
+    background: var(--bg);
+    outline: none;
+  }
+  #map-embed-input:focus { border-color: var(--accent); }
+  #map-embed-input::placeholder { color: var(--text-hint); }
 
   /* ── STOP COORD INPUTS ── */
   .stop-coords {
@@ -741,12 +778,19 @@
         <span id="map-hint-text"></span>
         <button class="btn btn-sm" onclick="openSettings()" id="map-key-btn" style="display:none">Add API key in Settings</button>
       </div>
-      <div id="map-embed-wrap">
-        <iframe id="map-fallback-iframe"
-          src="https://www.google.com/maps/d/embed?mid=1jcs3fqUQHSicdzkYPfijZ_cF353PxoI&ehbc=2E312F"
-          allowfullscreen loading="lazy"></iframe>
+      <div id="map-blank-placeholder">
+        <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" opacity="0.4"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z"/><circle cx="12" cy="9" r="2.5"/></svg>
+        <span>Add lat/lng to stops to plot them here, or import a saved Google map below</span>
+      </div>
+      <div id="map-embed-wrap" style="display:none">
+        <iframe id="map-fallback-iframe" src="" allowfullscreen loading="lazy"></iframe>
       </div>
       <div id="map-canvas" style="display:none"></div>
+      <div id="map-import-row">
+        <input id="map-embed-input" type="text" placeholder="Paste a Google My Maps embed URL or iframe…">
+        <button class="btn btn-sm" onclick="applyEmbedMap()">Import map</button>
+        <button class="btn btn-ghost btn-sm btn-danger" onclick="clearEmbedMap()" id="map-embed-clear-btn" style="display:none">Remove</button>
+      </div>
     </div>
 
   </div>
@@ -1346,15 +1390,25 @@ function renderMap() {
   const key = localStorage.getItem(LS_GMAPS_KEY);
   const canvas = document.getElementById('map-canvas');
   const embedWrap = document.getElementById('map-embed-wrap');
+  const blankPlaceholder = document.getElementById('map-blank-placeholder');
   const hintBar = document.getElementById('map-hint');
   const hintText = document.getElementById('map-hint-text');
   const keyBtn = document.getElementById('map-key-btn');
   const controls = document.getElementById('map-controls');
+  const importRow = document.getElementById('map-import-row');
+  const embedInput = document.getElementById('map-embed-input');
+  const clearBtn = document.getElementById('map-embed-clear-btn');
 
-  function showEmbed(hint, showKeyBtn) {
+  // Populate embed input from state
+  if (state.embedMapUrl && embedInput.value === '') {
+    embedInput.value = state.embedMapUrl;
+  }
+  clearBtn.style.display = state.embedMapUrl ? 'inline-flex' : 'none';
+
+  function showFallback(hint, showKeyBtn) {
     canvas.style.display = 'none';
-    embedWrap.style.display = 'block';
     controls.style.display = 'none';
+    importRow.style.display = 'flex';
     if (hint) {
       hintBar.style.display = 'flex';
       hintText.textContent = hint;
@@ -1362,13 +1416,22 @@ function renderMap() {
     } else {
       hintBar.style.display = 'none';
     }
+    if (state.embedMapUrl) {
+      blankPlaceholder.style.display = 'none';
+      embedWrap.style.display = 'block';
+      const iframe = document.getElementById('map-fallback-iframe');
+      if (iframe.src !== state.embedMapUrl) iframe.src = state.embedMapUrl;
+    } else {
+      blankPlaceholder.style.display = 'flex';
+      embedWrap.style.display = 'none';
+    }
     mapMarkers.forEach(m => m.setMap(null));
     mapMarkers = [];
     if (directionsRenderer) { directionsRenderer.setMap(null); directionsRenderer = null; }
   }
 
   if (!key) {
-    showEmbed('Add your Google Maps API key in Settings to plot your stops on the map.', true);
+    showFallback('Add your Google Maps API key in Settings to plot your stops on the map.', true);
     return;
   }
 
@@ -1377,21 +1440,23 @@ function renderMap() {
   if (!mapsApiLoaded) {
     mapRenderPending = true;
     loadMapsApi(key);
-    const hint = stopsWithCoords.length > 0 ? 'Loading map…' : 'Add lat/lng to stops to plot them on the map.';
-    showEmbed(hint, false);
+    const hint = stopsWithCoords.length > 0 ? 'Loading map…' : null;
+    showFallback(hint, false);
     return;
   }
 
   if (stopsWithCoords.length === 0) {
-    showEmbed('Add lat/lng to stops to plot them on the map.', false);
+    showFallback(null, false);
     return;
   }
 
-  // JS map is active — hide iframe, show canvas
+  // JS map is active — hide fallback, show canvas
   canvas.style.display = 'block';
   embedWrap.style.display = 'none';
+  blankPlaceholder.style.display = 'none';
   hintBar.style.display = 'none';
   controls.style.display = 'flex';
+  importRow.style.display = 'none';
 
   if (!mapInstance) {
     mapInstance = new google.maps.Map(canvas, {
@@ -1492,6 +1557,26 @@ function renderRoute() {
 
 function onRouteToggle() {
   renderRoute();
+}
+
+function applyEmbedMap() {
+  if (!state) return;
+  const raw = document.getElementById('map-embed-input').value.trim();
+  if (!raw) return;
+  // Accept either a full <iframe ...> tag or a bare URL
+  const srcMatch = raw.match(/src="([^"]+)"/);
+  state.embedMapUrl = srcMatch ? srcMatch[1] : raw;
+  document.getElementById('map-embed-input').value = state.embedMapUrl;
+  scheduleSave();
+  renderMap();
+}
+
+function clearEmbedMap() {
+  if (!state) return;
+  state.embedMapUrl = '';
+  document.getElementById('map-embed-input').value = '';
+  scheduleSave();
+  renderMap();
 }
 
 function saveMapsKey() {
