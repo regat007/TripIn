@@ -524,6 +524,112 @@
     line-height: 1.6;
   }
 
+  /* ── MAP SECTION ── */
+  #map-section {
+    margin-top: 40px;
+  }
+
+  #map-section-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 12px;
+    gap: 12px;
+    flex-wrap: wrap;
+  }
+
+  .map-section-title {
+    font-family: 'Instrument Serif', serif;
+    font-size: 20px;
+    font-weight: 400;
+  }
+
+  .map-controls {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-wrap: wrap;
+  }
+
+  .map-controls label {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 13px;
+    color: var(--text-muted);
+    cursor: pointer;
+    user-select: none;
+  }
+
+  .map-controls select {
+    font-family: inherit;
+    font-size: 13px;
+    color: var(--text-muted);
+    border: 1px solid var(--border-strong);
+    border-radius: var(--radius);
+    padding: 4px 8px;
+    background: var(--bg);
+    cursor: pointer;
+    outline: none;
+  }
+
+  #map-canvas {
+    height: 420px;
+    border-radius: var(--radius-lg);
+    overflow: hidden;
+    border: 1px solid var(--border);
+  }
+
+  .map-placeholder {
+    height: 160px;
+    border-radius: var(--radius-lg);
+    border: 1px dashed var(--border-strong);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    color: var(--text-hint);
+    font-size: 14px;
+    text-align: center;
+    padding: 24px;
+  }
+
+  /* ── STOP COORD INPUTS ── */
+  .stop-coords {
+    display: flex;
+    gap: 14px;
+    margin-top: 5px;
+  }
+
+  .stop-coord-field {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+  }
+
+  .stop-coord-label {
+    font-size: 11px;
+    color: var(--text-hint);
+    font-weight: 500;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+
+  .stop-coord-input {
+    font-family: inherit;
+    font-size: 12px;
+    color: var(--text-muted);
+    border: none;
+    border-bottom: 1px solid var(--border);
+    background: transparent;
+    width: 82px;
+    outline: none;
+    padding: 0 2px 1px;
+  }
+  .stop-coord-input:focus { border-color: var(--accent); }
+  .stop-coord-input::placeholder { color: var(--text-hint); }
+
   /* ── RESPONSIVE ── */
   @media (max-width: 600px) {
     #main { padding: 20px 16px 60px; }
@@ -606,6 +712,30 @@
       </button>
     </div>
 
+    <!-- Map section -->
+    <div id="map-section" style="display:none">
+      <div id="map-section-header">
+        <span class="map-section-title">Map</span>
+        <div class="map-controls" id="map-controls" style="display:none">
+          <label>
+            <input type="checkbox" id="show-route-checkbox" onchange="onRouteToggle()">
+            Show route
+          </label>
+          <select id="travel-mode-select" onchange="onRouteToggle()">
+            <option value="WALKING">Walking</option>
+            <option value="TRANSIT">Transit</option>
+            <option value="DRIVING">Driving</option>
+          </select>
+        </div>
+      </div>
+      <div id="map-placeholder" class="map-placeholder">
+        <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" opacity="0.4"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z"/><circle cx="12" cy="9" r="2.5"/></svg>
+        <span id="map-placeholder-text">Add lat/lng to stops to see them on the map</span>
+        <button class="btn btn-sm" onclick="openSettings()" id="map-key-btn" style="display:none">Add API key in Settings</button>
+      </div>
+      <div id="map-canvas" style="display:none"></div>
+    </div>
+
   </div>
 </div>
 
@@ -659,6 +789,17 @@
         <button class="btn" onclick="loadExistingBin()">Load trip from Bin ID</button>
         <button class="btn btn-danger btn-sm" onclick="clearLocalData()">Clear local data</button>
       </div>
+    </div>
+
+    <!-- Google Maps -->
+    <div class="settings-section">
+      <h3>Google Maps</h3>
+      <div class="field">
+        <label>Maps JavaScript API Key</label>
+        <input type="text" id="s-gmaps-key" placeholder="AIza...">
+        <span class="hint">From Google Cloud Console. Enables the map view with pins and routes.</span>
+      </div>
+      <button class="btn btn-sm" onclick="saveMapsKey()">Save key</button>
     </div>
 
     <!-- Status -->
@@ -871,6 +1012,8 @@ function renderTrip() {
   (state.days || []).forEach((day, di) => {
     container.appendChild(renderDay(day, di));
   });
+
+  renderMap();
 }
 
 function renderDay(day, di) {
@@ -909,16 +1052,30 @@ function renderStop(dayId, stop) {
 
   card.innerHTML = `
     <div class="stop-time">
-      <input type="time" value="${esc(stop.time || '')}" 
+      <input type="time" value="${esc(stop.time || '')}"
         onchange="updateStop('${dayId}','${stop.id}','time',this.value)"
         title="Time">
     </div>
     <div class="stop-body">
-      <input class="stop-title-input" value="${esc(stop.title || '')}" placeholder="Stop name" 
+      <input class="stop-title-input" value="${esc(stop.title || '')}" placeholder="Stop name"
         onchange="updateStop('${dayId}','${stop.id}','title',this.value)">
       <textarea class="stop-notes-input" placeholder="Notes…" rows="1"
         onchange="updateStop('${dayId}','${stop.id}','notes',this.value)"
         oninput="autoResize(this)">${esc(stop.notes || '')}</textarea>
+      <div class="stop-coords">
+        <div class="stop-coord-field">
+          <span class="stop-coord-label">lat</span>
+          <input class="stop-coord-input" type="number" step="any" placeholder="0.000000"
+            value="${esc(stop.lat != null ? stop.lat : '')}"
+            onchange="updateStop('${dayId}','${stop.id}','lat',parseFloat(this.value)||0);renderMap()">
+        </div>
+        <div class="stop-coord-field">
+          <span class="stop-coord-label">lng</span>
+          <input class="stop-coord-input" type="number" step="any" placeholder="0.000000"
+            value="${esc(stop.lng != null ? stop.lng : '')}"
+            onchange="updateStop('${dayId}','${stop.id}','lng',parseFloat(this.value)||0);renderMap()">
+        </div>
+      </div>
     </div>
     <div class="stop-actions">
       <button class="btn btn-ghost btn-sm btn-danger" onclick="removeStop('${dayId}','${stop.id}')" title="Remove">✕</button>
@@ -1038,6 +1195,8 @@ function openSettings() {
     document.getElementById('s-start-date').value   = state.startDate || '';
     document.getElementById('s-group-size').value   = state.groupSize || '';
   }
+  const mapsKey = localStorage.getItem(LS_GMAPS_KEY);
+  if (mapsKey) document.getElementById('s-gmaps-key').value = mapsKey;
 }
 
 function closeSettings() {
@@ -1104,6 +1263,233 @@ function uid() {
 
 function esc(str) {
   return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+// ─────────────────────────────────────────────
+// MAPS
+// ─────────────────────────────────────────────
+const LS_GMAPS_KEY = 'tripPlannerGMapsKey';
+
+const MAP_STYLES = [
+  { elementType: 'geometry', stylers: [{ color: '#2e312f' }] },
+  { elementType: 'labels.text.fill', stylers: [{ color: '#a0a89e' }] },
+  { elementType: 'labels.text.stroke', stylers: [{ color: '#2e312f' }] },
+  { featureType: 'road', elementType: 'geometry', stylers: [{ color: '#3e4a41' }] },
+  { featureType: 'road', elementType: 'labels.text.fill', stylers: [{ color: '#7a8a7d' }] },
+  { featureType: 'water', elementType: 'geometry', stylers: [{ color: '#1a2420' }] },
+  { featureType: 'poi', elementType: 'geometry', stylers: [{ color: '#283329' }] },
+  { featureType: 'poi.park', elementType: 'geometry', stylers: [{ color: '#243428' }] },
+  { featureType: 'transit', elementType: 'geometry', stylers: [{ color: '#344438' }] },
+  { featureType: 'administrative', elementType: 'geometry.stroke', stylers: [{ color: '#4a5e50' }] }
+];
+
+let mapInstance = null;
+let mapMarkers = [];
+let mapInfoWindow = null;
+let directionsRenderer = null;
+let mapsApiLoaded = false;
+let mapsApiLoading = false;
+let mapRenderPending = false;
+
+// Called by Maps JS API as the callback
+function initMap() {
+  mapsApiLoaded = true;
+  if (mapRenderPending) {
+    mapRenderPending = false;
+    renderMap();
+  }
+}
+
+function loadMapsApi(key) {
+  if (mapsApiLoaded || mapsApiLoading) return;
+  mapsApiLoading = true;
+  const script = document.createElement('script');
+  script.src = `https://maps.googleapis.com/maps/api/js?key=${encodeURIComponent(key)}&callback=initMap`;
+  script.async = true;
+  script.defer = true;
+  document.head.appendChild(script);
+}
+
+function getStopsWithCoords() {
+  if (!state) return [];
+  const result = [];
+  (state.days || []).forEach(day => {
+    (day.stops || []).forEach(stop => {
+      const lat = parseFloat(stop.lat);
+      const lng = parseFloat(stop.lng);
+      if (!isNaN(lat) && !isNaN(lng) && (lat !== 0 || lng !== 0)) {
+        result.push({ stop, day, lat, lng });
+      }
+    });
+  });
+  return result;
+}
+
+function renderMap() {
+  const section = document.getElementById('map-section');
+  if (!state) { section.style.display = 'none'; return; }
+  section.style.display = 'block';
+
+  const key = localStorage.getItem(LS_GMAPS_KEY);
+  const canvas = document.getElementById('map-canvas');
+  const placeholder = document.getElementById('map-placeholder');
+  const placeholderText = document.getElementById('map-placeholder-text');
+  const keyBtn = document.getElementById('map-key-btn');
+  const controls = document.getElementById('map-controls');
+
+  if (!key) {
+    canvas.style.display = 'none';
+    placeholder.style.display = 'flex';
+    placeholderText.textContent = 'Add your Google Maps API key in Settings to enable the map';
+    keyBtn.style.display = 'inline-flex';
+    controls.style.display = 'none';
+    return;
+  }
+
+  const stopsWithCoords = getStopsWithCoords();
+
+  if (!mapsApiLoaded) {
+    mapRenderPending = true;
+    loadMapsApi(key);
+    canvas.style.display = 'none';
+    placeholder.style.display = 'flex';
+    placeholderText.textContent = stopsWithCoords.length > 0 ? 'Loading map…' : 'Add lat/lng to stops to see them on the map';
+    keyBtn.style.display = 'none';
+    controls.style.display = 'none';
+    return;
+  }
+
+  if (stopsWithCoords.length === 0) {
+    canvas.style.display = 'none';
+    placeholder.style.display = 'flex';
+    placeholderText.textContent = 'Add lat/lng to stops to see them on the map';
+    keyBtn.style.display = 'none';
+    controls.style.display = 'none';
+    mapMarkers.forEach(m => m.setMap(null));
+    mapMarkers = [];
+    if (directionsRenderer) { directionsRenderer.setMap(null); directionsRenderer = null; }
+    return;
+  }
+
+  canvas.style.display = 'block';
+  placeholder.style.display = 'none';
+  controls.style.display = 'flex';
+  keyBtn.style.display = 'none';
+
+  if (!mapInstance) {
+    mapInstance = new google.maps.Map(canvas, {
+      zoom: 13,
+      center: { lat: stopsWithCoords[0].lat, lng: stopsWithCoords[0].lng },
+      styles: MAP_STYLES,
+      mapTypeControl: false,
+      streetViewControl: false,
+      fullscreenControl: true
+    });
+  }
+
+  // Clear existing markers and shared info window
+  mapMarkers.forEach(m => m.setMap(null));
+  mapMarkers = [];
+  if (mapInfoWindow) { mapInfoWindow.close(); }
+  mapInfoWindow = new google.maps.InfoWindow();
+
+  const bounds = new google.maps.LatLngBounds();
+
+  stopsWithCoords.forEach(({ stop, day, lat, lng }) => {
+    const position = { lat, lng };
+    const marker = new google.maps.Marker({
+      position,
+      map: mapInstance,
+      title: stop.title || 'Stop'
+    });
+    bounds.extend(position);
+    marker.addListener('click', () => {
+      mapInfoWindow.setContent(
+        `<div style="font-family:'DM Sans',sans-serif;font-size:13px;padding:2px 4px;max-width:200px">` +
+        `<strong style="font-size:14px">${esc(stop.title || 'Stop')}</strong>` +
+        `<div style="color:#666;margin-top:2px">${esc(day.label || '')}</div>` +
+        (stop.time ? `<div style="color:#888;margin-top:2px">${esc(stop.time)}</div>` : '') +
+        `</div>`
+      );
+      mapInfoWindow.open(mapInstance, marker);
+    });
+    mapMarkers.push(marker);
+  });
+
+  if (stopsWithCoords.length > 1) {
+    mapInstance.fitBounds(bounds);
+  } else {
+    mapInstance.setCenter({ lat: stopsWithCoords[0].lat, lng: stopsWithCoords[0].lng });
+    mapInstance.setZoom(14);
+  }
+
+  renderRoute();
+}
+
+function renderRoute() {
+  if (!mapInstance || !mapsApiLoaded) return;
+
+  if (directionsRenderer) {
+    directionsRenderer.setMap(null);
+    directionsRenderer = null;
+  }
+
+  const showRoute = document.getElementById('show-route-checkbox');
+  if (!showRoute || !showRoute.checked) return;
+
+  const stopsWithCoords = getStopsWithCoords();
+  if (stopsWithCoords.length < 2) return;
+
+  const travelMode = document.getElementById('travel-mode-select')?.value || 'WALKING';
+  const origin = { lat: stopsWithCoords[0].lat, lng: stopsWithCoords[0].lng };
+  const destination = { lat: stopsWithCoords[stopsWithCoords.length - 1].lat, lng: stopsWithCoords[stopsWithCoords.length - 1].lng };
+  const waypoints = stopsWithCoords.slice(1, -1).map(s => ({
+    location: { lat: s.lat, lng: s.lng },
+    stopover: true
+  }));
+
+  directionsRenderer = new google.maps.DirectionsRenderer({
+    suppressMarkers: true,
+    polylineOptions: {
+      strokeColor: '#2563eb',
+      strokeWeight: 3,
+      strokeOpacity: 0.7
+    }
+  });
+  directionsRenderer.setMap(mapInstance);
+
+  const service = new google.maps.DirectionsService();
+  service.route({
+    origin,
+    destination,
+    waypoints,
+    travelMode: google.maps.TravelMode[travelMode]
+  }, (result, status) => {
+    if (status === 'OK') {
+      directionsRenderer.setDirections(result);
+    } else {
+      if (directionsRenderer) { directionsRenderer.setMap(null); directionsRenderer = null; }
+    }
+  });
+}
+
+function onRouteToggle() {
+  renderRoute();
+}
+
+function saveMapsKey() {
+  const key = document.getElementById('s-gmaps-key').value.trim();
+  if (key) {
+    localStorage.setItem(LS_GMAPS_KEY, key);
+    showToast('Maps API key saved');
+    closeSettings();
+    renderMap();
+  } else {
+    localStorage.removeItem(LS_GMAPS_KEY);
+    showToast('Maps API key cleared');
+    closeSettings();
+    renderMap();
+  }
 }
 
 // ─────────────────────────────────────────────
