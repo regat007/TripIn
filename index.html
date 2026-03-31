@@ -979,6 +979,73 @@
     color: var(--accent);
   }
 
+  /* ── TRIP DASHBOARD ── */
+  #no-trip { text-align: left; padding: 40px 0; }
+  #no-trip.empty { text-align: center; padding: 80px 24px; }
+
+  .dashboard-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 24px;
+  }
+
+  .dashboard-header h2 {
+    font-family: 'Instrument Serif', serif;
+    font-size: 28px;
+    font-weight: 400;
+  }
+
+  .trip-card-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 12px;
+  }
+
+  @media (max-width: 600px) {
+    .trip-card-grid { grid-template-columns: 1fr; }
+  }
+
+  .trip-card {
+    background: var(--bg-secondary);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    padding: 16px;
+    box-shadow: var(--shadow);
+    display: flex;
+    flex-direction: column;
+  }
+
+  .trip-card-name {
+    font-size: 15px;
+    font-weight: 500;
+    color: var(--text);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    margin-bottom: 6px;
+  }
+
+  .trip-card-meta {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 12px;
+    color: var(--text-hint);
+  }
+
+  .role-badge {
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    padding: 2px 6px;
+    border-radius: 4px;
+  }
+
+  .role-badge.creator { background: var(--accent-bg); color: var(--accent); }
+  .role-badge.guest   { background: var(--bg-tertiary); color: var(--text-muted); }
+
   /* ── PRINT / PDF EXPORT ── */
   @media print {
     #topbar, #share-banner, #activity-section,
@@ -1011,6 +1078,7 @@
 <!-- TOP BAR -->
 <div id="topbar">
   <div class="topbar-left">
+    <button id="back-to-trips-btn" class="btn btn-ghost btn-sm" onclick="goHome()" style="display:none;border-right:1px solid var(--border);padding-right:10px;margin-right:4px">← Trips</button>
     <span class="app-name">TripIn</span>
     <span id="trip-name-display"></span>
   </div>
@@ -1038,15 +1106,8 @@
 <!-- MAIN CONTENT -->
 <div id="main">
 
-  <!-- No trip state -->
-  <div id="no-trip">
-    <h2>Plan your next city break</h2>
-    <p>Create a trip to get started, then share the link with your group.</p>
-    <button class="btn btn-primary" onclick="openSettings()">
-      <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 2v12M2 8h12"/></svg>
-      Create a trip
-    </button>
-  </div>
+  <!-- No trip state / Dashboard -->
+  <div id="no-trip"></div>
 
   <!-- Trip content (hidden until trip exists) -->
   <div id="trip-content" style="display:none">
@@ -1234,6 +1295,7 @@ const LS_JBKEY     = 'tripPlannerJSONBinKey';
 const LS_AUTHOR    = 'tripPlannerAuthorName';
 const LS_REACTIONS = 'tripPlannerUserReactions';
 const LS_GUEST_ID  = 'tripPlannerGuestId';
+const LS_HISTORY   = 'tripPlannerHistory';
 
 const PRESENCE_COLORS = ['#2563eb','#16a34a','#d97706','#dc2626','#7c3aed','#0891b2','#db2777'];
 const ACTIVITY_CAP    = 50;
@@ -1250,47 +1312,31 @@ const STOP_TEMPLATES  = [
 // INIT
 // ─────────────────────────────────────────────
 async function init() {
-  // Check for ?trip= in URL
   const params = new URLSearchParams(window.location.search);
   const urlBinId = params.get('trip');
-
-  if (urlBinId) {
-    binId = urlBinId;
-    localStorage.setItem(LS_BIN, binId);
-    setSyncStatus('saving', 'Loading…');
-    await fetchTrip();
-    showShareBanner();
-  } else {
-    // Try local cache
-    binId = localStorage.getItem(LS_BIN);
-    const cached = localStorage.getItem(LS_DATA);
-    if (binId && cached) {
-      try {
-        state = JSON.parse(cached);
-        renderTrip();
-        // Refresh from remote
-        await fetchTrip();
-      } catch(e) {
-        showNoTrip();
-      }
-    } else {
-      showNoTrip();
-    }
-  }
 
   // Populate settings fields from localStorage
   const key = localStorage.getItem(LS_JBKEY);
   if (key) document.getElementById('s-jsonbin-key').value = key;
-  if (binId) document.getElementById('s-bin-id').value = binId;
 
-  // Presence heartbeat + poll
-  if (binId) {
+  if (urlBinId) {
+    binId = urlBinId;
+    localStorage.setItem(LS_BIN, binId);
+    upsertHistory(binId, { tripName: '', role: 'guest' });
+    setSyncStatus('saving', 'Loading…');
+    await fetchTrip();
+    showShareBanner();
+
+    // Presence heartbeat + poll
     updatePresence();
     setInterval(async () => {
       updatePresence();
       await saveTrip();
       await fetchTrip();
     }, 90000);
+  } else {
+    showNoTrip();
+    renderTripHistory();
   }
 }
 
@@ -1310,6 +1356,9 @@ async function fetchTrip() {
     const data = await res.json();
     state = data.record;
     localStorage.setItem(LS_DATA, JSON.stringify(state));
+    const existingRole = (JSON.parse(localStorage.getItem(LS_HISTORY) || '[]').find(e => e.binId === binId) || {}).role || 'guest';
+    upsertHistory(binId, { tripName: state.tripName, role: existingRole });
+    document.getElementById('s-bin-id').value = binId || '';
     renderTrip();
     setSyncStatus('saved', 'Synced');
     fadeSync();
@@ -1388,6 +1437,7 @@ async function createTrip() {
     url.searchParams.set('trip', binId);
     window.history.pushState({}, '', url);
 
+    upsertHistory(binId, { tripName: name, role: 'creator' });
     document.getElementById('copy-link-btn').style.display = 'flex';
     setSyncStatus('saved', 'Created');
     fadeSync();
@@ -1414,6 +1464,7 @@ function scheduleSave() {
 // ─────────────────────────────────────────────
 function renderTrip() {
   if (!state) return;
+  document.getElementById('back-to-trips-btn').style.display = 'inline-flex';
   document.getElementById('no-trip').style.display = 'none';
   document.getElementById('trip-content').style.display = 'block';
   document.getElementById('copy-link-btn').style.display = binId ? 'flex' : 'none';
@@ -1634,6 +1685,7 @@ function loadExistingBin() {
   if (!id) { showToast('Enter a Bin ID'); return; }
   binId = id;
   localStorage.setItem(LS_BIN, binId);
+  upsertHistory(binId, { tripName: '', role: 'guest' });
   const url = new URL(window.location.href);
   url.searchParams.set('trip', binId);
   window.history.pushState({}, '', url);
@@ -1647,6 +1699,7 @@ function loadExistingBin() {
 function showNoTrip() {
   document.getElementById('no-trip').style.display = 'block';
   document.getElementById('trip-content').style.display = 'none';
+  renderTripHistory();
 }
 
 function showShareBanner() {
@@ -1724,6 +1777,7 @@ function clearLocalData() {
   if (isSaving) { showToast('Wait for save to finish'); return; }
   localStorage.removeItem(LS_DATA);
   localStorage.removeItem(LS_BIN);
+  localStorage.removeItem(LS_HISTORY);
   const url = new URL(window.location.href);
   url.searchParams.delete('trip');
   window.history.pushState({}, '', url);
@@ -2187,6 +2241,99 @@ function postComment(dayId, stopId) {
   if (input) input.value = '';
   logActivity('commented on a stop');
   scheduleSave();
+}
+
+// ─────────────────────────────────────────────
+// TRIP HISTORY / DASHBOARD
+// ─────────────────────────────────────────────
+function upsertHistory(id, patch) {
+  let history = [];
+  try { history = JSON.parse(localStorage.getItem(LS_HISTORY) || '[]'); } catch(e) {}
+  const idx = history.findIndex(e => e.binId === id);
+  if (idx >= 0) {
+    history[idx] = { ...history[idx], ...patch, binId: id, lastOpened: Date.now() };
+  } else {
+    history.push({ binId: id, tripName: '', role: 'guest', ...patch, lastOpened: Date.now() });
+  }
+  history.sort((a, b) => b.lastOpened - a.lastOpened);
+  if (history.length > 20) history.length = 20;
+  localStorage.setItem(LS_HISTORY, JSON.stringify(history));
+}
+
+function renderTripHistory() {
+  const el = document.getElementById('no-trip');
+  if (!el) return;
+  let history = [];
+  try { history = JSON.parse(localStorage.getItem(LS_HISTORY) || '[]'); } catch(e) {}
+
+  if (history.length === 0) {
+    el.className = 'empty';
+    el.innerHTML = `
+      <h2 style="font-family:'Instrument Serif',serif;font-size:28px;font-weight:400;margin-bottom:8px">Your trips</h2>
+      <p style="color:var(--text-muted);margin-bottom:24px">Create a trip to get started, then share the link with your group.</p>
+      <button class="btn btn-primary" onclick="openSettings()">
+        <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 2v12M2 8h12"/></svg>
+        New trip
+      </button>`;
+    return;
+  }
+
+  el.className = '';
+  el.innerHTML = `
+    <div class="dashboard-header">
+      <h2>Your trips</h2>
+      <button class="btn btn-primary" onclick="openSettings()">
+        <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 2v12M2 8h12"/></svg>
+        New trip
+      </button>
+    </div>
+    <div class="trip-card-grid">
+      ${history.map(entry => {
+        const dateStr = new Date(entry.lastOpened).toLocaleDateString(undefined, { day: 'numeric', month: 'short' });
+        const role = entry.role || 'guest';
+        const name = entry.tripName || 'Untitled trip';
+        return `<div class="trip-card">
+          <div class="trip-card-name" title="${esc(name)}">${esc(name)}</div>
+          <div class="trip-card-meta">
+            <span class="role-badge ${role}">${role === 'creator' ? 'Creator' : 'Guest'}</span>
+            <span>${dateStr}</span>
+          </div>
+          <button class="btn btn-sm" style="margin-top:12px;width:100%;justify-content:center" onclick="openTrip('${esc(entry.binId)}')">Open →</button>
+        </div>`;
+      }).join('')}
+    </div>`;
+}
+
+function openTrip(id) {
+  binId = id;
+  localStorage.setItem(LS_BIN, id);
+  const url = new URL(window.location.href);
+  url.searchParams.set('trip', id);
+  window.history.pushState({}, '', url);
+  document.getElementById('s-bin-id').value = id;
+  fetchTrip();
+
+  // Start presence + poll for this session
+  updatePresence();
+  setInterval(async () => {
+    updatePresence();
+    await saveTrip();
+    await fetchTrip();
+  }, 90000);
+}
+
+function goHome() {
+  state = null;
+  binId = null;
+  const url = new URL(window.location.href);
+  url.searchParams.delete('trip');
+  window.history.pushState({}, '', url);
+  document.getElementById('back-to-trips-btn').style.display = 'none';
+  document.getElementById('copy-link-btn').style.display = 'none';
+  document.getElementById('export-btn').style.display = 'none';
+  document.getElementById('trip-name-display').textContent = '';
+  setSyncStatus('', '');
+  showNoTrip();
 }
 
 // ─────────────────────────────────────────────
