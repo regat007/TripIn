@@ -872,6 +872,138 @@
     .trip-title-group h1 { font-size: 28px; }
     .stop-card { grid-template-columns: 44px 1fr auto; gap: 8px; }
   }
+
+  /* ── PRESENCE AVATARS ── */
+  #presence-row { display: flex; align-items: center; margin-right: 4px; }
+  .presence-avatar {
+    width: 26px;
+    height: 26px;
+    border-radius: 50%;
+    border: 2px solid var(--bg);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 10px;
+    font-weight: 600;
+    color: #fff;
+    margin-left: -6px;
+    flex-shrink: 0;
+    cursor: default;
+  }
+  .presence-avatar:first-child { margin-left: 0; }
+
+  /* ── ACTIVITY FEED ── */
+  #activity-section {
+    margin-bottom: 24px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    overflow: hidden;
+  }
+  #activity-toggle {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 9px 14px;
+    background: var(--bg-secondary);
+    border: none;
+    font-family: inherit;
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--text-muted);
+    cursor: pointer;
+    text-align: left;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+  }
+  #activity-toggle:hover { background: var(--bg-tertiary); }
+  #activity-body {
+    display: none;
+    max-height: 240px;
+    overflow-y: auto;
+  }
+  #activity-body.open { display: block; }
+  .activity-item {
+    display: flex;
+    align-items: baseline;
+    gap: 6px;
+    padding: 6px 14px;
+    font-size: 12px;
+    color: var(--text-muted);
+    border-bottom: 1px solid var(--border);
+  }
+  .activity-item:last-child { border-bottom: none; }
+  .activity-author { font-weight: 500; color: var(--text); }
+  .activity-time { color: var(--text-hint); font-size: 11px; margin-left: auto; white-space: nowrap; }
+
+  /* ── DRAG TO REORDER ── */
+  .drag-handle {
+    cursor: grab;
+    color: var(--text-hint);
+    font-size: 14px;
+    padding: 2px 3px;
+    border-radius: 3px;
+    user-select: none;
+    flex-shrink: 0;
+    line-height: 1;
+  }
+  .drag-handle:active { cursor: grabbing; }
+  .stop-card.drag-over {
+    outline: 2px dashed var(--accent);
+    outline-offset: 2px;
+    background: var(--accent-bg);
+  }
+  .stop-card.dragging { opacity: 0.35; }
+
+  /* ── STOP TEMPLATES ── */
+  .template-pills {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    margin-top: 5px;
+  }
+  .template-pill {
+    padding: 2px 9px;
+    border-radius: 20px;
+    border: 1px solid var(--border-strong);
+    background: var(--bg);
+    font-family: inherit;
+    font-size: 12px;
+    color: var(--text-muted);
+    cursor: pointer;
+    transition: background 0.12s, border-color 0.12s;
+  }
+  .template-pill:hover {
+    background: var(--bg-secondary);
+    border-color: var(--accent);
+    color: var(--accent);
+  }
+
+  /* ── PRINT / PDF EXPORT ── */
+  @media print {
+    #topbar, #share-banner, #activity-section,
+    .add-stop-row, #add-day-row, .stop-actions,
+    .stop-reactions, .stop-comments, .stop-coords,
+    .add-notice-row, .notice-remove, #map-section,
+    #settings-overlay, #welcome-overlay, #toast {
+      display: none !important;
+    }
+    body { background: #fff; color: #000; }
+    #main { max-width: 100%; padding: 8px; margin: 0; }
+    .day-block { page-break-inside: avoid; margin-bottom: 24px; }
+    .day-header { border-bottom: 2px solid #000; }
+    .stop-card {
+      background: #fff;
+      border: 1px solid #ccc;
+      border-radius: 0;
+      box-shadow: none;
+      page-break-inside: avoid;
+      margin-bottom: 4px;
+      grid-template-columns: 52px 1fr;
+    }
+    input, textarea { border: none !important; outline: none !important; background: transparent !important; }
+    .notice-card { border-radius: 0; }
+  }
 </style>
 </head>
 <body>
@@ -887,6 +1019,11 @@
       <div class="sync-dot" id="sync-dot"></div>
       <span id="sync-label">—</span>
     </div>
+    <div id="presence-row"></div>
+    <button class="btn btn-sm" onclick="window.print()" id="export-btn" style="display:none">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M6 9V2h12v7"/><rect x="6" y="14" width="12" height="8"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/></svg>
+      Export PDF
+    </button>
     <button class="btn btn-sm" onclick="copyShareLink()" id="copy-link-btn" style="display:none">
       <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M6 7.5a1.5 1.5 0 0 1 3 0v1a1.5 1.5 0 0 1-3 0v-1z"/><path d="M9.5 6H11a3 3 0 0 1 0 6H9"/><path d="M6.5 12H5a3 3 0 0 1 0-6h1.5"/></svg>
       Copy link
@@ -919,6 +1056,17 @@
       <span>📎 Shared trip loaded</span>
       <span class="share-url" id="share-url-text"></span>
       <button class="btn btn-sm" onclick="copyShareLink()">Copy</button>
+    </div>
+
+    <!-- Activity feed -->
+    <div id="activity-section" style="display:none">
+      <button id="activity-toggle" onclick="toggleActivityFeed()">
+        <span>📋 Activity</span>
+        <span id="activity-toggle-chevron">▸</span>
+      </button>
+      <div id="activity-body">
+        <div id="activity-list"></div>
+      </div>
     </div>
 
     <!-- Trip header -->
@@ -1085,6 +1233,18 @@ const LS_BIN       = 'tripPlannerBinId';
 const LS_JBKEY     = 'tripPlannerJSONBinKey';
 const LS_AUTHOR    = 'tripPlannerAuthorName';
 const LS_REACTIONS = 'tripPlannerUserReactions';
+const LS_GUEST_ID  = 'tripPlannerGuestId';
+
+const PRESENCE_COLORS = ['#2563eb','#16a34a','#d97706','#dc2626','#7c3aed','#0891b2','#db2777'];
+const ACTIVITY_CAP    = 50;
+const STOP_TEMPLATES  = [
+  { emoji: '✈️', label: 'Flight'     },
+  { emoji: '🏨', label: 'Hotel'      },
+  { emoji: '🍽️', label: 'Restaurant' },
+  { emoji: '🎯', label: 'Activity'   },
+  { emoji: '🚌', label: 'Transport'  },
+  { emoji: '🎪', label: 'Attraction' },
+];
 
 // ─────────────────────────────────────────────
 // INIT
@@ -1122,6 +1282,16 @@ async function init() {
   const key = localStorage.getItem(LS_JBKEY);
   if (key) document.getElementById('s-jsonbin-key').value = key;
   if (binId) document.getElementById('s-bin-id').value = binId;
+
+  // Presence heartbeat + poll
+  if (binId) {
+    updatePresence();
+    setInterval(async () => {
+      updatePresence();
+      await saveTrip();
+      await fetchTrip();
+    }, 90000);
+  }
 }
 
 // ─────────────────────────────────────────────
@@ -1247,6 +1417,7 @@ function renderTrip() {
   document.getElementById('no-trip').style.display = 'none';
   document.getElementById('trip-content').style.display = 'block';
   document.getElementById('copy-link-btn').style.display = binId ? 'flex' : 'none';
+  document.getElementById('export-btn').style.display = 'flex';
 
   // Header
   document.getElementById('trip-name-input').value      = state.tripName || '';
@@ -1263,6 +1434,8 @@ function renderTrip() {
   });
 
   renderMap();
+  renderPresence();
+  renderActivityFeed();
 }
 
 function renderDay(day, di) {
@@ -1292,6 +1465,11 @@ function renderDay(day, di) {
         <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M8 2v12M2 8h12"/></svg>
         Add stop
       </button>
+      <div class="template-pills">
+        ${STOP_TEMPLATES.map(t =>
+          `<button class="template-pill" onclick="addStopFromTemplate('${day.id}','${t.emoji}','${t.label}')">${t.emoji} ${t.label}</button>`
+        ).join('')}
+      </div>
     </div>
   `;
 
@@ -1313,6 +1491,7 @@ function renderStop(dayId, stop) {
   card.className = 'stop-card';
   card.dataset.stopId = stop.id;
   card.dataset.dayId  = dayId;
+  card.setAttribute('draggable', 'true');
 
   card.innerHTML = `
     <div class="stop-time">
@@ -1364,9 +1543,17 @@ function renderStop(dayId, stop) {
       </div>
     </div>
     <div class="stop-actions">
+      <span class="drag-handle" title="Drag to reorder">⠿</span>
       <button class="btn btn-ghost btn-sm btn-danger" onclick="removeStop('${dayId}','${stop.id}')" title="Remove">✕</button>
     </div>
   `;
+
+  // Drag-to-reorder
+  card.addEventListener('dragstart', onStopDragStart);
+  card.addEventListener('dragover',  onStopDragOver);
+  card.addEventListener('dragleave', onStopDragLeave);
+  card.addEventListener('drop',      onStopDrop);
+  card.addEventListener('dragend',   onStopDragEnd);
 
   // Auto-resize textarea
   const ta = card.querySelector('textarea');
@@ -1405,6 +1592,7 @@ function addDay() {
   const n = state.days.length + 1;
   state.days.push({ id: uid(), label: `Day ${n}`, stops: [], notices: [] });
   renderTrip();
+  logActivity('added a day');
   scheduleSave();
 }
 
@@ -1413,6 +1601,7 @@ function removeDay(dayId) {
   if (state.days.length <= 1) { showToast("Can't remove the only day"); return; }
   state.days = state.days.filter(d => d.id !== dayId);
   renderTrip();
+  logActivity('removed a day');
   scheduleSave();
 }
 
@@ -1423,6 +1612,7 @@ function addStop(dayId) {
   day.stops.push(stop);
   const list = document.getElementById(`stops-${dayId}`);
   list.appendChild(renderStop(dayId, stop));
+  logActivity('added a stop');
   scheduleSave();
   // Focus the title input of the new stop
   const newCard = list.lastElementChild;
@@ -1435,6 +1625,7 @@ function removeStop(dayId, stopId) {
   day.stops = day.stops.filter(s => s.id !== stopId);
   const card = document.querySelector(`.stop-card[data-stop-id="${stopId}"]`);
   if (card) card.remove();
+  logActivity('removed a stop');
   scheduleSave();
 }
 
@@ -1852,6 +2043,7 @@ function addNotice(dayId, theme) {
     const newCard = document.getElementById(`notice-${notice.id}`);
     newCard?.querySelector('.notice-text-input')?.focus();
   }
+  logActivity(`added a ${theme} notice`);
   scheduleSave();
 }
 
@@ -1960,6 +2152,7 @@ function confirmAuthorName(stopId, dayId) {
   const name = input ? input.value.trim() : '';
   if (!name) { input && (input.style.borderColor = 'var(--danger)'); return; }
   localStorage.setItem(LS_AUTHOR, name);
+  updatePresence();
   const area = document.getElementById(`cmt-input-area-${stopId}`);
   if (area) area.innerHTML = renderCommentInputArea(stopId, dayId);
   setTimeout(() => document.getElementById(`cmt-input-${stopId}`)?.focus(), 0);
@@ -1992,7 +2185,172 @@ function postComment(dayId, stopId) {
   const list = document.getElementById(`cmt-list-${stopId}`);
   if (list) list.innerHTML = commentsHtml(stop.comments);
   if (input) input.value = '';
+  logActivity('commented on a stop');
   scheduleSave();
+}
+
+// ─────────────────────────────────────────────
+// PRESENCE (Feature 1)
+// ─────────────────────────────────────────────
+function getOrCreateGuestId() {
+  let id = localStorage.getItem(LS_GUEST_ID);
+  if (!id) { id = 'g-' + uid(); localStorage.setItem(LS_GUEST_ID, id); }
+  return id;
+}
+
+function updatePresence() {
+  if (!state || !binId) return;
+  const guestId = getOrCreateGuestId();
+  if (!state.presence) state.presence = {};
+  state.presence[guestId] = { name: localStorage.getItem(LS_AUTHOR) || 'Guest', ts: Date.now() };
+  // Prune stale entries (> 5 min)
+  const cutoff = Date.now() - 5 * 60 * 1000;
+  for (const id of Object.keys(state.presence)) {
+    if (state.presence[id].ts < cutoff) delete state.presence[id];
+  }
+}
+
+function renderPresence() {
+  const row = document.getElementById('presence-row');
+  if (!row || !state || !state.presence) { if (row) row.innerHTML = ''; return; }
+  const myId = localStorage.getItem(LS_GUEST_ID);
+  const cutoff = Date.now() - 3 * 60 * 1000;
+  const active = Object.entries(state.presence)
+    .filter(([id, p]) => p.ts >= cutoff && id !== myId)
+    .sort((a, b) => a[1].ts - b[1].ts);
+  row.innerHTML = active.map(([id, p]) => {
+    const initials = p.name.trim().split(/\s+/).map(w => w[0]).join('').toUpperCase().slice(0, 2) || '?';
+    const hash = id.split('').reduce((a, c) => a + c.charCodeAt(0), 0);
+    const color = PRESENCE_COLORS[Math.abs(hash) % PRESENCE_COLORS.length];
+    return `<div class="presence-avatar" style="background:${color}" title="${esc(p.name)}">${esc(initials)}</div>`;
+  }).join('');
+}
+
+// ─────────────────────────────────────────────
+// ACTIVITY FEED (Feature 2)
+// ─────────────────────────────────────────────
+function logActivity(action) {
+  if (!state) return;
+  if (!state.activity) state.activity = [];
+  const author = localStorage.getItem(LS_AUTHOR) || 'Someone';
+  state.activity.unshift({ id: uid(), author, action, ts: Date.now() });
+  if (state.activity.length > ACTIVITY_CAP) state.activity.length = ACTIVITY_CAP;
+  renderActivityFeed();
+}
+
+function renderActivityFeed() {
+  if (!state) return;
+  const section = document.getElementById('activity-section');
+  const list = document.getElementById('activity-list');
+  if (!section || !list) return;
+  const items = state.activity || [];
+  section.style.display = items.length > 0 ? 'block' : 'none';
+  list.innerHTML = items.map(item =>
+    `<div class="activity-item">
+      <span class="activity-author">${esc(item.author)}</span>
+      <span>${esc(item.action)}</span>
+      <span class="activity-time">${relativeTime(item.ts)}</span>
+    </div>`
+  ).join('');
+}
+
+function toggleActivityFeed() {
+  const body = document.getElementById('activity-body');
+  const chevron = document.getElementById('activity-toggle-chevron');
+  body.classList.toggle('open');
+  chevron.textContent = body.classList.contains('open') ? '▾' : '▸';
+}
+
+// ─────────────────────────────────────────────
+// DRAG TO REORDER STOPS (Feature 3)
+// ─────────────────────────────────────────────
+let dragSrcStopId = null;
+let dragSrcDayId  = null;
+
+function onStopDragStart(e) {
+  const card = e.currentTarget;
+  dragSrcStopId = card.dataset.stopId;
+  dragSrcDayId  = card.dataset.dayId;
+  e.dataTransfer.effectAllowed = 'move';
+  e.dataTransfer.setData('text/plain', dragSrcStopId);
+  requestAnimationFrame(() => card.classList.add('dragging'));
+}
+
+function onStopDragOver(e) {
+  e.preventDefault();
+  e.dataTransfer.dropEffect = 'move';
+  const card = e.currentTarget;
+  if (card.dataset.stopId !== dragSrcStopId) card.classList.add('drag-over');
+}
+
+function onStopDragLeave(e) {
+  e.currentTarget.classList.remove('drag-over');
+}
+
+function onStopDragEnd(e) {
+  e.currentTarget.classList.remove('dragging');
+  document.querySelectorAll('.stop-card.drag-over').forEach(c => c.classList.remove('drag-over'));
+  dragSrcStopId = null;
+  dragSrcDayId  = null;
+}
+
+function onStopDrop(e) {
+  e.preventDefault();
+  const targetCard  = e.currentTarget;
+  const targetStopId = targetCard.dataset.stopId;
+  const targetDayId  = targetCard.dataset.dayId;
+  targetCard.classList.remove('drag-over');
+  if (!dragSrcStopId || dragSrcStopId === targetStopId) return;
+
+  const srcCard = document.querySelector(`.stop-card[data-stop-id="${dragSrcStopId}"]`);
+  if (!srcCard) return;
+  const targetList = document.getElementById(`stops-${targetDayId}`);
+  const srcList    = document.getElementById(`stops-${dragSrcDayId}`);
+  if (!targetList || !srcList) return;
+
+  // Insert before or after target based on cursor position
+  const rect = targetCard.getBoundingClientRect();
+  if (e.clientY < rect.top + rect.height / 2) {
+    targetList.insertBefore(srcCard, targetCard);
+  } else {
+    targetList.insertBefore(srcCard, targetCard.nextSibling);
+  }
+  srcCard.dataset.dayId = targetDayId;
+
+  // Sync state arrays
+  const srcDay    = state.days.find(d => d.id === dragSrcDayId);
+  const targetDay = state.days.find(d => d.id === targetDayId);
+  if (!srcDay || !targetDay) return;
+
+  const srcIdx = srcDay.stops.findIndex(s => s.id === dragSrcStopId);
+  const [moved] = srcDay.stops.splice(srcIdx, 1);
+
+  const newOrder = Array.from(targetList.querySelectorAll('.stop-card')).map(c => c.dataset.stopId);
+  const newIdx = newOrder.indexOf(dragSrcStopId);
+  if (newIdx === -1) targetDay.stops.push(moved);
+  else targetDay.stops.splice(newIdx, 0, moved);
+
+  logActivity('reordered stops');
+  scheduleSave();
+}
+
+// ─────────────────────────────────────────────
+// STOP TEMPLATES (Feature 4)
+// ─────────────────────────────────────────────
+function addStopFromTemplate(dayId, emoji, label) {
+  const day = state.days.find(d => d.id === dayId);
+  if (!day) return;
+  const stop = {
+    id: uid(), time: '', title: `${emoji} ${label}`,
+    notes: '', cost: 0, votes: { up: 0, down: 0 },
+    reactions: { fire: 0, up: 0, down: 0 }, comments: []
+  };
+  day.stops.push(stop);
+  const list = document.getElementById(`stops-${dayId}`);
+  list.appendChild(renderStop(dayId, stop));
+  logActivity(`added a ${label} stop`);
+  scheduleSave();
+  list.lastElementChild.querySelector('.stop-title-input')?.focus();
 }
 
 // ─────────────────────────────────────────────
