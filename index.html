@@ -618,6 +618,79 @@
     flex-wrap: wrap;
   }
 
+  /* ── MAP LEGEND ── */
+  #map-legend { margin-bottom: 10px; }
+
+  .legend-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .legend-entry {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border);
+    border-radius: 20px;
+    padding: 3px 8px 3px 5px;
+  }
+
+  .legend-color {
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    border: 2px solid var(--border-strong);
+    padding: 0;
+    cursor: pointer;
+    flex-shrink: 0;
+    -webkit-appearance: none;
+    appearance: none;
+    background: transparent;
+    overflow: hidden;
+  }
+  .legend-color::-webkit-color-swatch-wrapper { padding: 0; }
+  .legend-color::-webkit-color-swatch { border: none; border-radius: 50%; }
+  .legend-color::-moz-color-swatch { border: none; border-radius: 50%; }
+
+  .legend-label {
+    font-size: 13px;
+    color: var(--text);
+    border: none;
+    background: transparent;
+    font-family: inherit;
+    outline: none;
+    min-width: 40px;
+    max-width: 180px;
+  }
+  .legend-label::placeholder { color: var(--text-hint); }
+
+  .legend-remove {
+    background: none;
+    border: none;
+    cursor: pointer;
+    color: var(--text-hint);
+    font-size: 13px;
+    padding: 0;
+    line-height: 1;
+  }
+  .legend-remove:hover { color: var(--danger); }
+
+  .legend-add-btn {
+    font-size: 12px;
+    color: var(--text-hint);
+    background: none;
+    border: 1px dashed var(--border-strong);
+    border-radius: 20px;
+    padding: 3px 10px;
+    cursor: pointer;
+    font-family: inherit;
+    transition: color 0.12s, border-color 0.12s;
+  }
+  .legend-add-btn:hover { color: var(--text-muted); border-color: var(--accent); }
+
   #map-import-row {
     margin-top: 10px;
     display: flex;
@@ -1173,6 +1246,7 @@
           </select>
         </div>
       </div>
+      <div id="map-legend"></div>
       <div id="map-hint" class="map-hint" style="display:none">
         <span id="map-hint-text"></span>
         <button class="btn btn-sm" onclick="openSettings()" id="map-key-btn" style="display:none">Add API key in Settings</button>
@@ -1485,6 +1559,7 @@ function renderTrip() {
   });
 
   renderMap();
+  renderMapLegend();
   renderPresence();
   renderActivityFeed();
 }
@@ -2066,6 +2141,58 @@ function saveMapsKey() {
     closeSettings();
     renderMap();
   }
+}
+
+// ─────────────────────────────────────────────
+// MAP LEGEND
+// ─────────────────────────────────────────────
+const LEGEND_COLORS = ['#ef4444','#3b82f6','#16a34a','#f59e0b','#8b5cf6','#ec4899','#0891b2','#f97316'];
+
+function renderMapLegend() {
+  const el = document.getElementById('map-legend');
+  if (!el || !state) return;
+  if (!state.mapLegend) state.mapLegend = [];
+  el.innerHTML = `<div class="legend-row">
+    ${state.mapLegend.map(entry => `
+      <div class="legend-entry" data-legend-id="${esc(entry.id)}">
+        <input type="color" class="legend-color" value="${esc(entry.color)}"
+          oninput="updateLegendEntry('${esc(entry.id)}','color',this.value)">
+        <input type="text" class="legend-label" value="${esc(entry.label)}" placeholder="Label…"
+          style="width:${Math.max(40, (entry.label.length || 5) * 8)}px"
+          oninput="sizeLegendLabel(this)"
+          onchange="updateLegendEntry('${esc(entry.id)}','label',this.value)">
+        <button class="legend-remove" onclick="removeLegendEntry('${esc(entry.id)}')" title="Remove">✕</button>
+      </div>`).join('')}
+    <button class="legend-add-btn" onclick="addLegendEntry()">+ Add key entry</button>
+  </div>`;
+}
+
+function addLegendEntry() {
+  if (!state) return;
+  if (!state.mapLegend) state.mapLegend = [];
+  const color = LEGEND_COLORS[state.mapLegend.length % LEGEND_COLORS.length];
+  state.mapLegend.push({ id: uid(), color, label: '' });
+  renderMapLegend();
+  const entries = document.querySelectorAll('.legend-entry');
+  entries[entries.length - 1]?.querySelector('.legend-label')?.focus();
+  scheduleSave();
+}
+
+function removeLegendEntry(id) {
+  if (!state || !state.mapLegend) return;
+  state.mapLegend = state.mapLegend.filter(e => e.id !== id);
+  renderMapLegend();
+  scheduleSave();
+}
+
+function updateLegendEntry(id, field, value) {
+  if (!state || !state.mapLegend) return;
+  const entry = state.mapLegend.find(e => e.id === id);
+  if (entry) { entry[field] = value; scheduleSave(); }
+}
+
+function sizeLegendLabel(input) {
+  input.style.width = Math.max(40, input.value.length * 8 || 40) + 'px';
 }
 
 // ─────────────────────────────────────────────
